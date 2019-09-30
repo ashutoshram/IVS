@@ -6,6 +6,7 @@ import traceback
 import json
 import threading
 import time
+import numpy as np
 
 
 class Mosquitto():
@@ -25,6 +26,9 @@ class Mosquitto():
                 self.client.username_pw_set(accesstoken, "")
             self.client.connect(IP, port)
             self.connection = True
+            self.pcHistory = np.zeros([12])
+            self.max_ = 0
+
         except:
             print("Could not connect to Thingsboard, Postgresql or PeopleCountTester")
             traceback.print_exc()
@@ -53,7 +57,8 @@ class Mosquitto():
         if self.connection is False:
             return
         print('count = %d, inUse = %d' % (count, inUse))
-        d = {"hostname": self.hostname, "peopleCount" : count, "cameraInUse" : inUse,}
+        avg_, max_ = self.avgmax(count)
+        d = {"hostname": self.hostname, "peopleCount" : count, "cameraInUse" : inUse, "average": avg_, "maximum": max_}
         self.client.publish(self.topic, json.dumps(d)) #publish
     
     
@@ -64,6 +69,17 @@ class Mosquitto():
     def loop(self, timeout_):
         self.client.loop(timeout=timeout_)
     
+
+    def avgmax(self, count):
+        self.pcHistory[-1] = count
+        self.pcHistory = np.roll(self.pcHistory, -1)
+        print(self.pcHistory)
+        avg = np.mean(self.pcHistory)
+        if np.amax(self.pcHistory) > self.max_:
+            self.max_ = np.amax(self.pcHistory)
+        print(avg)
+        return avg, self.max_
+
     def try_reconnect(self):
         while True:
             try:
